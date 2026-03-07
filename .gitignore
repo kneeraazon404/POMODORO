@@ -1,1 +1,6 @@
 pomodoro_data.db
+__pycache__/
+build/
+dist/
+pomodoro.spec
+pomodoro.exe

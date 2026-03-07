@@ -3,7 +3,6 @@ from tkinter import messagebox, simpledialog
 import datetime
 import sqlite3
 
-# Set the overall theme and color scheme
 ctk.set_appearance_mode("Dark") 
 ctk.set_default_color_theme("blue")
 
@@ -17,16 +16,15 @@ class PomodoroApp(ctk.CTk):
         # Mini Timer Variables
         self.mini_window = None
         self.mini_lbl = None
+        self.is_fullscreen = False
+        self.normal_geometry = ""
         
-        # Database Setup
         self.init_db()
         
-        # Timer Variables
         self.is_running = False
         self.time_left = 0
         self.current_mode = "Study"
         
-        # UI Setup - Modern Tabview
         self.tabview = ctk.CTkTabview(self, width=850, height=650)
         self.tabview.pack(padx=20, pady=20, expand=True, fill="both")
         
@@ -36,7 +34,6 @@ class PomodoroApp(ctk.CTk):
         self.build_home_tab()
         self.build_timer_tab()
         
-        # Load Initial Data
         self.load_dashboard_stats()
         self.load_goals()
         self.load_tasks()
@@ -50,10 +47,7 @@ class PomodoroApp(ctk.CTk):
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS tasks (id INTEGER PRIMARY KEY, name TEXT, status TEXT, date_added TEXT)''')
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS ledger (date TEXT PRIMARY KEY, study_minutes INTEGER)''')
         self.cursor.execute('''CREATE TABLE IF NOT EXISTS goals (type TEXT PRIMARY KEY, content TEXT)''')
-        
-        # This handles your Rollover Request: Unfinished tasks move to today, completed tasks stay on their original date.
         self.cursor.execute("UPDATE tasks SET date_added = ? WHERE status = 'pending' AND date_added != ?", (self.today, self.today))
-        
         self.cursor.execute("INSERT OR IGNORE INTO ledger (date, study_minutes) VALUES (?, 0)", (self.today,))
         self.conn.commit()
 
@@ -99,7 +93,8 @@ class PomodoroApp(ctk.CTk):
 
     def load_dashboard_stats(self):
         self.cursor.execute("SELECT study_minutes FROM ledger WHERE date = ?", (self.today,))
-        mins = self.cursor.fetchone()[0]
+        row = self.cursor.fetchone()
+        mins = row[0] if row else 0
         hours = round(mins / 60, 2)
         
         self.cursor.execute("SELECT COUNT(*) FROM tasks WHERE date_added = ?", (self.today,))
@@ -149,12 +144,12 @@ class PomodoroApp(ctk.CTk):
         controls_frame.pack(pady=10)
         
         ctk.CTkLabel(controls_frame, text="Study (min):", font=("Helvetica", 14)).grid(row=0, column=0, padx=10)
-        self.opt_study = ctk.CTkOptionMenu(controls_frame, values=["1", "15", "25", "30", "45", "50", "60", "90", "120"], width=80)
+        self.opt_study = ctk.CTkOptionMenu(controls_frame, values=["15", "25", "30", "45", "50", "60", "90", "120"], width=80)
         self.opt_study.set("25")
         self.opt_study.grid(row=0, column=1, padx=10)
         
         ctk.CTkLabel(controls_frame, text="Break (min):", font=("Helvetica", 14)).grid(row=0, column=2, padx=10)
-        self.opt_break = ctk.CTkOptionMenu(controls_frame, values=["1","5", "10", "15", "20", "30"], width=80)
+        self.opt_break = ctk.CTkOptionMenu(controls_frame, values=["5", "10", "15", "20", "30"], width=80)
         self.opt_break.set("5")
         self.opt_break.grid(row=0, column=3, padx=10)
         
@@ -167,7 +162,6 @@ class PomodoroApp(ctk.CTk):
         btn_break = ctk.CTkButton(btn_frame, text="Start Break", font=("Helvetica", 16, "bold"), fg_color="#74B9FF", hover_color="#0984E3", command=lambda: self.start_timer("Break"))
         btn_break.grid(row=0, column=1, padx=10)
         
-        # Added Stop Button for the continuous loop
         btn_stop = ctk.CTkButton(btn_frame, text="Stop Loop", font=("Helvetica", 16, "bold"), fg_color="#B2BEC3", hover_color="#636E72", command=self.stop_timer)
         btn_stop.grid(row=0, column=2, padx=10)
         
@@ -197,29 +191,96 @@ class PomodoroApp(ctk.CTk):
         self.mini_window.attributes("-topmost", True) 
         self.mini_window.attributes("-toolwindow", True)
         
-        window_width = 100
-        window_height = 40
+        window_width = 150
+        window_height = 60
         x_pos = int((self.winfo_screenwidth() / 2) - (window_width / 2))
-        y_pos = int(self.winfo_screenheight() - window_height - 50) 
+        y_pos = int(self.winfo_screenheight() - window_height - 60) 
         
         self.mini_window.geometry(f"{window_width}x{window_height}+{x_pos}+{y_pos}")
+        self.normal_geometry = self.mini_window.geometry()
+        self.is_fullscreen = False
         
         bg_color = "#2D3436" 
         text_color = "#FF7675" if mode == "Study" else "#74B9FF"
         self.mini_window.configure(fg_color=bg_color)
         
-        self.mini_lbl = ctk.CTkLabel(self.mini_window, text="00:00", font=("Helvetica", 24, "bold"), text_color=text_color, cursor="hand2")
+        self.mini_lbl = ctk.CTkLabel(self.mini_window, text="00:00", font=("Helvetica", 36, "bold"), text_color=text_color, cursor="hand2")
         self.mini_lbl.pack(expand=True, fill="both")
         
-        # Bind clicking the mini timer to restore the main window
-        self.mini_lbl.bind("<Button-1>", self.restore_main_window)
-        self.mini_window.bind("<Button-1>", self.restore_main_window)
+        # Stretch Grip (Bottom Right Corner)
+        self.sizegrip = ctk.CTkFrame(self.mini_window, width=15, height=15, fg_color="#2D3436", cursor="bottom_right_corner", corner_radius=0)
+        self.sizegrip.place(relx=1.0, rely=1.0, anchor="se")
+        
+        # Bindings for Dragging
+        self.mini_lbl.bind("<ButtonPress-1>", self.start_move)
+        self.mini_lbl.bind("<B1-Motion>", self.do_move)
+        self.mini_lbl.bind("<ButtonRelease-1>", self.stop_move)
+        
+        # Bindings for Stretching
+        self.sizegrip.bind("<ButtonPress-1>", self.start_resize)
+        self.sizegrip.bind("<B1-Motion>", self.do_resize)
+        
+        # Binding for Double Click (Fullscreen)
+        self.mini_lbl.bind("<Double-Button-1>", self.toggle_fullscreen)
+        
+        # Binding for Auto-Scaling Font
+        self.mini_window.bind("<Configure>", self.auto_scale_font)
 
-    def restore_main_window(self, event=None):
-        self.deiconify()          # Un-minimize if minimized
-        self.lift()               # Bring to top of window stack
-        self.focus_force()        # Force Windows to give it focus
-        self.attributes('-topmost', True) # Flash it on top
+    # --- Dragging Logic ---
+    def start_move(self, event):
+        self.x = event.x
+        self.y = event.y
+        self.dragged = False
+
+    def do_move(self, event):
+        # Calculate new position
+        x = self.mini_window.winfo_x() - self.x + event.x
+        y = self.mini_window.winfo_y() - self.y + event.y
+        self.mini_window.geometry(f"+{x}+{y}")
+        self.dragged = True
+
+    def stop_move(self, event):
+        # If it wasn't dragged (just clicked), restore main window
+        if not self.dragged:
+            self.restore_main_window()
+
+    # --- Resizing (Stretching) Logic ---
+    def start_resize(self, event):
+        self.start_w = self.mini_window.winfo_width()
+        self.start_h = self.mini_window.winfo_height()
+        self.start_x = event.x_root
+        self.start_y = event.y_root
+
+    def do_resize(self, event):
+        new_w = max(100, self.start_w + (event.x_root - self.start_x))
+        new_h = max(40, self.start_h + (event.y_root - self.start_y))
+        self.mini_window.geometry(f"{new_w}x{new_h}")
+
+    # --- Fullscreen Logic ---
+    def toggle_fullscreen(self, event=None):
+        self.is_fullscreen = not self.is_fullscreen
+        if self.is_fullscreen:
+            self.normal_geometry = self.mini_window.geometry()
+            screen_w = self.winfo_screenwidth()
+            screen_h = self.winfo_screenheight()
+            self.mini_window.geometry(f"{screen_w}x{screen_h}+0+0")
+            self.sizegrip.place_forget() # Hide the grip in fullscreen
+        else:
+            self.mini_window.geometry(self.normal_geometry)
+            self.sizegrip.place(relx=1.0, rely=1.0, anchor="se") # Bring it back
+
+    # --- Dynamic Font Scaling ---
+    def auto_scale_font(self, event):
+        if event.widget == self.mini_window:
+            # Scale the font to roughly 60% of the window's height
+            new_size = max(24, int(event.height * 0.6))
+            self.mini_lbl.configure(font=("Helvetica", new_size, "bold"))
+
+    def restore_main_window(self):
+        self.deiconify()
+        self.lift()
+        self.focus_force()
+        self.attributes('-topmost', True)
         self.attributes('-topmost', False)
 
     def destroy_mini_timer(self):
@@ -266,10 +327,7 @@ class PomodoroApp(ctk.CTk):
                 self.conn.commit()
                 self.load_dashboard_stats()
             
-            # Bring window forward briefly to notify user of transition
             self.restore_main_window()
-            
-            # Determine the next mode and auto-start it
             next_mode = "Break" if self.current_mode == "Study" else "Study"
             self.start_timer(next_mode)
 
