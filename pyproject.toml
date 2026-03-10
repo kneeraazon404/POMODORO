@@ -1,0 +1,11 @@
+[project]
+name = "pomodoro"
+version = "2.0.0"
+requires-python = ">=3.10"
+dependencies = [
+    "customtkinter>=5.2",
+    "pillow>=10.0",
+]
+
+[project.scripts]
+pomodoro = "main:main"

@@ -1,6 +1,37 @@
-pomodoro_data.db
+# Python
 __pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environments
+.venv/
+venv/
+env/
+
+# uv / pip
+uv.lock
+.python-version
+
+# Runtime database (auto-created on first launch; keep the directory)
+data/*.db
+
+# Arch Linux packaging artifacts
+src/
+pkg/
+*.pkg.tar.zst
+pomodoro.spec
+
+# PyInstaller
 build/
 dist/
-pomodoro.spec
-pomodoro.exe
+*.exe
+
+# IDE / OS
+.idea/
+.vscode/
+*.swp
+*~
+.DS_Store
+Thumbs.db

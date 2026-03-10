@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=POMODORO
+GenericName=Pomodoro Timer
+Comment=Focus timer with goal and task tracking
+Exec=pomodoro
+Icon=/opt/pomodoro/assets/icon.png
+Terminal=false
+Categories=Utility;Office;ProjectManagement;
+Keywords=pomodoro;timer;focus;productivity;goals;
+StartupWMClass=pomodoro
